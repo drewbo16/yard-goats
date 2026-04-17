@@ -182,6 +182,24 @@ svg.trend-chart{display:block;}
 .sgr-val.blue{color:var(--blue);}
 
 
+/* SINGLE GAME RECORDS */
+.sgr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;}
+.sgr-card{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,44,118,.08);}
+.sgr-header{background:linear-gradient(135deg,var(--blue),var(--blue-mid));padding:10px 14px;border-bottom:2px solid var(--green);display:flex;align-items:center;justify-content:space-between;}
+.sgr-title{font-family:'Bebas Neue',cursive;font-size:16px;letter-spacing:1.5px;color:var(--tan-light);}
+.sgr-icon{font-size:20px;}
+.sgr-row{display:flex;align-items:center;padding:8px 14px;border-bottom:1px solid var(--stripe);gap:8px;}
+.sgr-row:last-child{border-bottom:none;}
+.sgr-row:hover{background:var(--stripe);}
+.sgr-rank{font-size:10px;color:var(--text-muted);width:16px;font-family:'DM Mono',monospace;flex-shrink:0;}
+.sgr-rank.gold{color:var(--tan);font-weight:700;}
+.sgr-info{flex:1;min-width:0;}
+.sgr-player{font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sgr-detail{font-size:10px;color:var(--text-muted);margin-top:1px;}
+.sgr-val{font-family:'Bebas Neue',cursive;font-size:28px;color:var(--green-dark);flex-shrink:0;line-height:1;}
+.sgr-val.blue{color:var(--blue);}
+
+
 /* ASK THE GOAT */
 .ask-wrap{max-width:720px;margin:0 auto;}
 .ask-hero{background:linear-gradient(135deg,var(--blue),var(--blue-mid));border-radius:12px;padding:20px 20px 16px;margin-bottom:16px;display:flex;align-items:center;gap:14px;box-shadow:0 4px 16px rgba(0,44,118,.2);}
@@ -236,7 +254,6 @@ svg.trend-chart{display:block;}
   <button class="tab-btn" data-tab="profile" onclick="showTab(this)">Player Profile</button>
   <button class="tab-btn" data-tab="streaks" onclick="showTab(this)">Hit Streaks</button>
   <button class="tab-btn" data-tab="gamelog" onclick="showTab(this)">Game Records</button>
-  <button class="tab-btn" data-tab="ask" onclick="showTab(this)">&#x1F916; Ask the Goat</button>
 </nav>
 
 <div class="filter-bar" id="mainFilterBar">
@@ -275,7 +292,6 @@ svg.trend-chart{display:block;}
   <div id="profile"    class="tab-page"><div id="profileContent"></div></div>
   <div id="streaks"    class="tab-page"><div id="streaksContent"></div></div>
   <div id="gamelog"    class="tab-page"><div id="gamelogContent"></div></div>
-  <div id="ask"       class="tab-page"><div id="askContent"></div></div>
 </main>
 
 <script>
@@ -431,7 +447,7 @@ function showTab(btn){
   document.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active');});
   document.getElementById(tabId).classList.add('active');
   btn.classList.add('active');
-  var hideBar=tabId==='profile'||tabId==='streaks'||tabId==='gamelog'||tabId==='ask';
+  var hideBar=tabId==='profile'||tabId==='streaks'||tabId==='gamelog';
   document.getElementById('mainFilterBar').style.display=hideBar?'none':'';
   document.getElementById('minABGroup').style.display=(tabId==='batLeaders'||tabId==='batFull')?'':'none';
   document.getElementById('minIPGroup').style.display=(tabId==='pitLeaders'||tabId==='pitFull')?'':'none';
@@ -439,7 +455,6 @@ function showTab(btn){
   if(tabId==='profile')renderProfile();
   if(tabId==='streaks')renderStreaks();
   if(tabId==='gamelog')renderGamelog();
-  if(tabId==='ask')initAsk();
 }
 function renderAll(){
   var f=getF();
@@ -1365,10 +1380,125 @@ function renderGamelog(){
   document.getElementById('gamelogContent').innerHTML=html;
 }
 
+// ── GAME RECORDS ──────────────────────────────────────────────────────
+function renderGamelog(){
+  var hitValid=hitData.filter(function(r){return num(r['PA'])>0;});
+  var pitAll=pitData;
+
+  function gameCtx(season,gameNum){
+    var g=schedMap[season+'_'+gameNum];
+    if(!g)return{opp:'?',date:'?',result:'?',ts:'?',os:'?'};
+    var ts=num(g['Team Score']),os=num(g['Opponent Score']);
+    var res=gameResult(ts,os);
+    var resTxt=res==='T'?'TIE '+ts+'-'+os:(res==='W'?'W ':'L ')+ts+'-'+os;
+    return{opp:g['Opponent'],date:g['Date'],result:resTxt,res:res};
+  }
+
+  function topRows(arr,sortFn,topN){return arr.slice().sort(sortFn).slice(0,topN||5);}
+
+  function sgrCard(title,icon,rawRows,valKey,valFmt,detailFn){
+    var soMap={'Active':0,'Inactive':1,'Sub':2};
+    var sorted=rawRows.slice().sort(function(a,b){
+      var vd=num(b[valKey])-num(a[valKey]);
+      if(vd!==0)return vd;
+      var sa=soMap[rosterStatus[a['Player']]]!==undefined?soMap[rosterStatus[a['Player']]]:1;
+      var sb=soMap[rosterStatus[b['Player']]]!==undefined?soMap[rosterStatus[b['Player']]]:1;
+      return sa-sb;
+    });
+    var entries=[];
+    var displayRank=1;
+    var idx=0;
+    while(idx<sorted.length&&displayRank<=5){
+      var curVal=num(sorted[idx][valKey]);
+      var group=[];
+      while(idx<sorted.length&&num(sorted[idx][valKey])===curVal){group.push(sorted[idx]);idx++;}
+      if(displayRank<=4){
+        for(var gi=0;gi<group.length;gi++){
+          if(displayRank<=4){
+            entries.push({r:group[gi],rank:displayRank});
+            displayRank++;
+          } else {
+            var overflow=group.slice(gi);
+            if(overflow.length>1) entries.push({r:null,rank:5,isTieGroup:true,tiedPlayers:overflow,val:curVal});
+            else entries.push({r:overflow[0],rank:5});
+            break;
+          }
+        }
+      } else {
+        if(group.length===1) entries.push({r:group[0],rank:5});
+        else if(group.length>1) entries.push({r:null,rank:5,isTieGroup:true,tiedPlayers:group,val:curVal});
+        break;
+      }
+    }
+    var html='<div class="sgr-card"><div class="sgr-header"><span class="sgr-title">'+title+'</span><span class="sgr-icon">'+icon+'</span></div>';
+    for(var ei=0;ei<entries.length;ei++){
+      var entry=entries[ei];
+      if(entry.isTieGroup){
+        var names=entry.tiedPlayers.map(function(r){
+          return rosterStatus[r['Player']]==='Active'?('<strong>'+initials(r['Player'])+'</strong>'):initials(r['Player']);
+        }).join(', ');
+        html+='<div class="sgr-row" style="padding:6px 14px">';
+        html+='<span class="sgr-rank">'+entry.rank+'</span>';
+        html+='<div class="sgr-info">';
+        html+='<div style="font-size:11px;color:var(--text-muted);font-style:italic">'+entry.tiedPlayers.length+' players tied at '+valFmt(entry.val)+'</div>';
+        html+='<div style="font-size:11px;color:var(--text-muted)">'+names+'</div>';
+        html+='</div><div class="sgr-val" style="font-size:20px;color:var(--text-muted)">'+valFmt(entry.val)+'</div>';
+        html+='</div>';
+      } else {
+        var r=entry.r;
+        var ctx=gameCtx(r['Season'],r['Game #']);
+        var resCls=ctx.res==='W'?'hi':ctx.res==='L'?'lo':'';
+        var isActive=rosterStatus[r['Player']]==='Active';
+        html+='<div class="sgr-row">';
+        html+='<span class="sgr-rank'+(entry.rank===1?' gold':'')+'">'+entry.rank+'</span>';
+        html+='<div class="sgr-info">';
+        html+='<div class="sgr-player">'+(isActive?'<strong>'+r['Player']+'</strong>':r['Player'])+'</div>';
+        html+='<div class="sgr-detail">'+r['Season']+' vs '+ctx.opp+' &bull; '+ctx.date+' &bull; <span class="'+resCls+'">'+ctx.result+'</span>'+(detailFn?(' &bull; '+detailFn(r)):'')+'</div>';
+        html+='</div>';
+        html+='<div class="sgr-val">'+valFmt(num(r[valKey]))+'</div>';
+        html+='</div>';
+      }
+    }
+    html+='</div>';
+    return html;
+  }
+
+  // Most H in a game
+  var topH=topRows(hitValid.filter(function(r){return num(r['H'])>0;}),function(a,b){return num(b['H'])-num(a['H']);});
+  // Most RBI
+  var topRBI=topRows(hitValid.filter(function(r){return num(r['RBI'])>0;}),function(a,b){return num(b['RBI'])-num(a['RBI']);});
+  // Most HR
+  var topHR=topRows(hitValid.filter(function(r){return num(r['HR'])>0;}),function(a,b){return num(b['HR'])-num(a['HR']);});
+  // Most SB
+  var topSB=topRows(hitValid.filter(function(r){return num(r['SB'])>0;}),function(a,b){return num(b['SB'])-num(a['SB']);});
+  // Most K (pitching)
+  var topK=topRows(pitAll,function(a,b){return num(b['SO'])-num(a['SO']);});
+  // Most IP no ER (min 4 IP)
+  var pitNoER=pitAll.filter(function(r){return num(r['ER'])===0&&num(r['IP'])>=4;});
+  var topNoER=topRows(pitNoER,function(a,b){return num(b['IP'])-num(a['IP']);});
+  // Most IP with 0 BB in a single outing
+  var pitNoBB=pitAll.filter(function(r){return num(r['BB'])===0&&num(r['IP'])>0;});
+  var topBB=topRows(pitNoBB,function(a,b){return num(b['IP'])-num(a['IP']);});
+
+  var html='<div class="sec-title" style="margin-top:0">Batting — Single Game Records</div>';
+  html+='<div class="sgr-grid">';
+  html+=sgrCard('Most Hits','&#x26BE;',topH,'H',fmtI,function(r){return r['H']+'H / '+r['AB']+'AB';});
+  html+=sgrCard('Most RBI','&#x1F4AA;',topRBI,'RBI',fmtI,function(r){return r['H']+'H, '+r['HR']+'HR';});
+  html+=sgrCard('Most Home Runs','&#x1F680;',topHR,'HR',fmtI,function(r){return r['RBI']+' RBI';});
+  html+=sgrCard('Most Stolen Bases','&#x26A1;',topSB,'SB',fmtI,null);
+  html+='</div>';
+  html+='<div class="sec-title">Pitching — Single Game Records</div>';
+  html+='<div class="sgr-grid">';
+  html+=sgrCard('Most Strikeouts','&#x1F525;',topK,'SO',fmtI,function(r){return fmtIP(num(r['IP']))+' IP, '+r['ER']+' ER';});
+  html+=sgrCard('Most IP — No ER','&#x1F9CA;',topNoER,'IP',fmtIP,function(r){return r['SO']+' K, '+r['BB']+' BB';});
+  html+=sgrCard('Most IP — No Walks','&#x1F3AF;',topBB,'IP',fmtIP,function(r){return r['SO']+' K, '+r['H']+' H, '+r['ER']+' ER';});
+  html+='</div>';
+  document.getElementById('gamelogContent').innerHTML=html;
+}
+
 // ── ASK THE GOAT ──────────────────────────────────────────────────────
 var askMessages = [];
 var askLoading = false;
-var ASK_KEY = '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';
 
 function initAsk(){
   if(document.getElementById('askContent').innerHTML.trim()){return;} // already built
