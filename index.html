@@ -1562,15 +1562,23 @@ async function askSend(){
       askMessages.push({role:'assistant', content:answer});
       renderMessages();
     } else if(data.error){
+      var errType = data.error.type || '';
       var errMsg = data.error.message || 'Something went wrong.';
-      if(data.error.type === 'authentication_error'){
-        errMsg = 'API key issue — make sure billing is set up at console.anthropic.com.';
-      } else if(data.error.type === 'credit_balance_too_low'){
-        errMsg = 'Credits not loaded yet — check console.anthropic.com/billing and try again in a few minutes.';
-      } else {
-        errMsg = data.error.type + ': ' + errMsg;
+      var friendly = errType + ': ' + errMsg;
+      if(errType === 'authentication_error'){
+        friendly = 'API key rejected. The key may need to be refreshed.';
+      } else if(errType === 'credit_balance_too_low'){
+        friendly = 'Out of credits — check console.anthropic.com/billing.';
+      } else if(errType === 'not_found_error'){
+        friendly = 'Model not found: ' + errMsg;
+      } else if(errType === 'overloaded_error'){
+        friendly = 'Anthropic servers busy — try again in a moment.';
       }
-      askMessages.push({role:'assistant', content:'Sorry, hit an error: '+errMsg});
+      askMessages.push({role:'assistant', content:'Error: ' + friendly});
+      renderMessages();
+    } else {
+      // Unexpected response shape - show raw for debugging
+      askMessages.push({role:'assistant', content:'Unexpected response: ' + JSON.stringify(data).slice(0,200)});
       renderMessages();
     }
   } catch(err){
